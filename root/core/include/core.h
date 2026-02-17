@@ -1,23 +1,8 @@
-#ifndef CORE_HPP
-#define CORE_HPP
+#pragma once
 
-#include <nova/logger/logger.hpp>
+#define WORKING_DIR "Nova"
 
+namespace Nova::Compiler {
 
-class Core {
-    private:
-        Nova::Logger _l;
-    public:
-        Core();
-        ~Core();
-
-        void load();
-        void unload();
 };
 
-struct ModuleContext {
-    Nova::Logger logger = Nova::Logger("Module");
-    
-};
-
-#endif

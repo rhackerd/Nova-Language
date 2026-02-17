@@ -1,81 +1,97 @@
+#include "CLI/CLI.hpp"
+#include "compiler.h"
+#include <cstdlib>
 #include <fmt/format.h>
+#include <lsp/connection.h>
+#include <lsp/io/standardio.h>
 #include <stdio.h>
 #include <dlfcn.h>
 #include <filesystem>
 #include <chrono>
 #include <thread>
 #include <core.h>
+#include <Nova/Core/core.h>
+#include <CLI/CLI.hpp>
+#include <logger.h>
+#include <lsp.h>
+#include <vector>
 
-void* handle = nullptr;
-Nova::Logger logger("Main");
-
-void load_module() {
-    const char* path = "../lib/libmodule.so";
+struct MyArgs {
+    bool compiler {false};
+    bool help {false};
 
 
-    while (!std::filesystem::exists(path)) {
-        logger.info("Waiting for module to be built...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
 
-    while (true) {
+    std::string configPath {};
+    bool generateAll {false};
 
-        void* new_handle = dlopen(path, RTLD_NOW);
+    bool compileAll {true};
+    bool lsp{false};
+};
 
-        if (new_handle) {
-            handle = new_handle;
-            break;
+NOVA_LOG_DEF("Main");
+
+
+int main(int argc, char** argv) {
+
+    MyArgs args{};
+
+    NCINFO("Welcome to Nova Language!");
+    CLI::App app{"Nova Language Compiler"};
+    argv = app.ensure_utf8(argv);
+
+    auto compiler = app.add_subcommand("compiler", "Manual usage of the Nova Compiler")->callback([&args](){
+        args.compiler = true;
+    });
+
+    // LSP
+    auto lsp = app.add_subcommand("lsp", "Manual usage of the Nova Language Server")->callback([&args]() {
+        args.lsp = true;
+    });
+
+    compiler->add_option("-c, --config", args.configPath, "Path to configuration file")->check(CLI::ExistingFile);
+    compiler->add_flag("--parse", args.compileAll, "Compile all projects specified in the configuration file");
+    compiler->add_flag("--compile", args.compileAll, "Compile all projects specified in the configuration file");
+
+
+    CLI11_PARSE(app, argc, argv);
+
+    if (args.compiler) NCINFO("Compiler usage was requested.");
+    if (args.compiler) {
+        Nova::Compiler::Compiler compiler;
+
+        if (args.generateAll) compiler.generateAll("./");
+        if (args.compileAll) {
+            compiler.generateAll("./");
+            // Then compile
         }
 
-        logger.warn(std::string("dlopen failed: ") + dlerror());
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-}
+        // std::string test = "var int x = 2 + 2;ret 0;x = test();";
 
-ModuleContext * core_ptr = nullptr;
+        // NCINFO("Splitting: {}", test);
+        // std::vector<Nova::Compiler::Assignment> ass = compiler.splitCall(test);
+        // for (const auto& as : ass) {
+        //     NCINFO("Assign: ");
+        //     for (const auto& a : as.tokens) {
+        //         NCINFO("'{}'", a.token);
+        //     }
+        // }
 
-int main() {
-    logger.info("Starting application...");
-    const char* module_path = "../lib/libmodule.so";
+    }else if (args.lsp) {
+        NCINFO("LSP usage was requested.");
+        
+        auto connection = lsp::Connection(lsp::io::standardIO());
+        auto messageHandler = lsp::MessageHandler(connection);
 
-    Core core;
-    core.load();
+        auto lsp = Nova::Compiler::LSP(messageHandler);
 
-    core_ptr = new ModuleContext{};
-
-    load_module();
-    logger.info("Module loaded.");
-    auto last_write = std::filesystem::last_write_time(module_path);
-
-    using update_fn = void(*)();
-    update_fn plugin_update = (update_fn)dlsym(handle, "plugin_update");
-    using init_fn = void(*)(ModuleContext*);
-    init_fn plugin_init = (init_fn)dlsym(handle, "plugin_init");
-
-    while (true) {
-
-
-        plugin_update();
-
-        if (std::filesystem::exists(module_path)) {
-            auto cur = std::filesystem::last_write_time(module_path);
-            if (cur != last_write) {
-
-                last_write = cur;
-
-                logger.info("Reloading module...");
-
-                dlclose(handle);
-                load_module();
-                plugin_update = (update_fn)dlsym(handle, "plugin_update");
-                plugin_init = (init_fn)dlsym(handle, "plugin_init");
-                plugin_init(core_ptr);
-                logger.info("Module reloaded.");
-            }
+        bool running = true;
+        while(running) {
+            messageHandler.processIncomingMessages();
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    core.unload();
-    return 0;
+
+
+    NCINFO("Goodbye.");
+    return EXIT_SUCCESS;
 }

@@ -1,0 +1,8 @@
+{
+    "lspConfig.servers": [
+        {
+            "language": "Nova",
+            "cmd": "Nova lsp"
+        }
+    ]
+}

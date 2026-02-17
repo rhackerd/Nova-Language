@@ -13,12 +13,17 @@ target_link_libraries(app
     PRIVATE
         ${PROJECT_NAME}
         fmt
+        CLI11::CLI11
+        lsp
 )
 
 # Optional: Set output to bin/
 set_target_properties(app PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    OUTPUT_NAME "Nova"
 )
+
+
 
 
 add_custom_target(run
